@@ -4,88 +4,90 @@
 
 <h1 align="center">FB Feed Only</h1>
 
-<p align="center">Extension Chrome ẩn Messenger, khung chat và danh bạ trên Facebook — chỉ giữ lại News Feed.</p>
+<p align="center">A Chrome extension that hides Messenger, chat popups and contacts on Facebook — leaving only the News Feed.</p>
 
 ---
 
-## Tính năng
+## Features
 
-- **Ẩn tin nhắn & chat** (mặc định bật)
-  - Nút Messenger trên thanh điều hướng và mọi link tới `/messages` hoặc messenger.com
-  - Khung chat nổi ở góc phải dưới và nút "Tin nhắn mới"
-  - Cột bên phải (danh bạ, đoạn chat nhóm)
-  - Tự chuyển về trang chủ khi mở `facebook.com/messages/...`
-- **Ẩn menu bên trái** (mặc định tắt) — chỉ còn News Feed ở giữa
-- Bật/tắt ngay trong popup, áp dụng tức thì, không cần tải lại trang
-- Hỗ trợ giao diện Facebook tiếng Việt và tiếng Anh
-- Popup có chế độ sáng/tối theo hệ điều hành
+- **Hide messages & chat** (on by default)
+  - The Messenger button in the top bar and every link to `/messages` or messenger.com
+  - Floating chat windows in the bottom-right corner and the "New message" button
+  - The right sidebar (contacts, group conversations)
+  - Redirects to the home page when opening `facebook.com/messages/...`
+- **Hide left menu** (off by default) — only the News Feed stays in the middle
+- Toggle from the popup; changes apply instantly without reloading the page
+- Works with both the English and Vietnamese Facebook UI
+- Popup follows the system light/dark theme
 
-## Cài đặt
+## Installation
 
-1. Tải hoặc clone repo này về máy
-2. Mở `chrome://extensions`
-3. Bật **Developer mode** (góc trên bên phải)
-4. Bấm **Load unpacked** → chọn thư mục `fb-feed-only`
-5. Tải lại tab Facebook
+1. Download or clone this repository
+2. Open `chrome://extensions`
+3. Enable **Developer mode** (top-right corner)
+4. Click **Load unpacked** → select the `fb-feed-only` folder
+5. Reload your Facebook tab
 
-Dùng được trên các trình duyệt nhân Chromium (Chrome, Edge, Brave, Cốc Cốc…).
+Works on any Chromium-based browser (Chrome, Edge, Brave, Cốc Cốc…).
 
-**Cập nhật** sau khi sửa code: vào `chrome://extensions` → bấm ↻ trên thẻ FB Feed Only → tải lại tab Facebook.
+**Updating** after code changes: go to `chrome://extensions` → click ↻ on the FB Feed Only card → reload the Facebook tab.
 
-## Sử dụng
+## Usage
 
-Bấm icon extension trên thanh công cụ để mở popup và bật/tắt từng tùy chọn. Nhãn trạng thái **Đang bật / Đang tắt** cho biết có tùy chọn nào đang hoạt động hay không.
+Click the extension icon in the toolbar to open the popup and toggle each option. The status badge (**Đang bật** = on / **Đang tắt** = off) shows whether any option is active.
 
-## Quyền riêng tư
+> The popup UI is currently in Vietnamese.
 
-- Chỉ dùng quyền `storage` để lưu 2 cài đặt bật/tắt (đồng bộ qua tài khoản Chrome)
-- Chỉ chạy trên `*.facebook.com`
-- Không đọc nội dung tin nhắn, không gửi dữ liệu đi đâu cả
+## Privacy
 
-## Cách hoạt động
+- Uses only the `storage` permission, to save the two toggles (synced via your Chrome account)
+- Runs only on `*.facebook.com`
+- Never reads message content and never sends data anywhere
 
-Facebook dùng tên class CSS ngẫu nhiên và đổi liên tục, nên extension nhận diện phần tử qua những thứ ổn định hơn:
+## How it works
 
-| Phần tử | Cách nhận diện |
+Facebook uses randomized CSS class names that change frequently, so the extension identifies elements through more stable signals:
+
+| Element | Detected by |
 | --- | --- |
-| Nút Messenger | `aria-label` như "Messenger", "Đoạn chat", "Chats" |
-| Link tin nhắn | `href` trỏ tới `/messages`, `/messenger` hoặc messenger.com |
-| Khung chat nổi | Ô nhập có `aria-label` "Tin nhắn"/"Message" → ẩn khối `position: fixed` chứa nó |
-| Cột danh bạ | `[role="complementary"]` |
-| Menu trái | `[role="navigation"]` nằm ngoài thanh trên cùng |
+| Messenger button | `aria-label` such as "Messenger", "Chats", "Đoạn chat" |
+| Message links | `href` pointing to `/messages`, `/messenger` or messenger.com |
+| Chat popups | A textbox labelled "Message" / "Tin nhắn" → hide its enclosing `position: fixed` dock |
+| Contacts sidebar | `[role="complementary"]` |
+| Left menu | `[role="navigation"]` outside the top bar |
 
-Một `MutationObserver` quét các phần tử mới xuất hiện (Facebook là SPA nên nội dung tải liên tục) và đánh dấu chúng bằng `data-fbfo-hidden`. CSS chỉ ẩn khi `<html>` có class tương ứng, nên tắt tùy chọn là hiện lại ngay.
+A `MutationObserver` scans newly added elements (Facebook is a SPA and loads content continuously) and tags matches with `data-fbfo-hidden`. CSS hides them only while `<html>` carries the matching class, so turning an option off reveals everything immediately.
 
-### Hạn chế
+### Limitations
 
-- Facebook thay đổi giao diện thường xuyên — nếu một phần nào đó không còn bị ẩn, có thể nhãn `aria-label` đã đổi. Danh sách nhãn nằm trong [`src/rules.js`](src/rules.js).
-- Ẩn cột bên phải cũng ẩn luôn quảng cáo, sinh nhật và các mục khác trong cột đó.
-- Chưa hỗ trợ ngôn ngữ giao diện khác ngoài tiếng Việt và tiếng Anh.
+- Facebook changes its UI often — if something stops being hidden, its `aria-label` has probably changed. The label lists live in [`src/rules.js`](src/rules.js).
+- Hiding the right sidebar also hides ads, birthdays and anything else in that column.
+- Only the English and Vietnamese Facebook UI are supported for now.
 
-## Phát triển
+## Development
 
-Yêu cầu: Node.js 20+ (chạy test), Python 3 + Pillow (tạo lại icon).
+Requirements: Node.js 20+ (tests), Python 3 + Pillow (regenerating icons).
 
 ```bash
-npm test                          # unit test + coverage (node:test, không cần cài thêm gì)
-python3 scripts/generate-icons.py # vẽ lại icon vào thư mục icons/
+npm test                          # unit tests + coverage (node:test, no dependencies)
+python3 scripts/generate-icons.py # redraw icons into icons/
 ```
 
-### Cấu trúc thư mục
+### Project structure
 
 ```
 fb-feed-only/
 ├── manifest.json          # Manifest V3
 ├── src/
-│   ├── rules.js           # Quy tắc nhận diện thuần (dùng chung cho content script, popup và test)
-│   ├── content.js         # Quét DOM, đánh dấu phần tử, chuyển hướng khỏi /messages
-│   └── content.css        # Quy tắc ẩn theo class trên <html>
-├── popup/                 # Giao diện bật/tắt
-├── icons/                 # Icon 16/32/48/128 + logo 512
+│   ├── rules.js           # Pure matching rules (shared by content script, popup and tests)
+│   ├── content.js         # DOM scanning, element tagging, redirect away from /messages
+│   └── content.css        # Hide rules keyed on classes on <html>
+├── popup/                 # Toggle UI
+├── icons/                 # 16/32/48/128 icons + 512 logo
 ├── scripts/generate-icons.py
 └── tests/rules.test.js
 ```
 
-### Thêm nhãn cho ngôn ngữ khác
+### Adding labels for another language
 
-Thêm nhãn (viết thường) vào các mảng `MESSAGE_BUTTON_LABELS`, `CHAT_DOCK_LABELS`, `MESSAGE_INPUT_LABELS` trong [`src/rules.js`](src/rules.js), bổ sung test trong [`tests/rules.test.js`](tests/rules.test.js), rồi chạy `npm test`.
+Add the lowercase labels to `MESSAGE_BUTTON_LABELS`, `CHAT_DOCK_LABELS` and `MESSAGE_INPUT_LABELS` in [`src/rules.js`](src/rules.js), add matching cases to [`tests/rules.test.js`](tests/rules.test.js), then run `npm test`.
