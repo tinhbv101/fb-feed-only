@@ -1,0 +1,8 @@
+{
+  "name": "fb-feed-only",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test --experimental-test-coverage tests/*.test.js"
+  }
+}

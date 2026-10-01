@@ -1,0 +1,9 @@
+/* Elements tagged by content.js; removing the html class reveals them again. */
+html.fbfo-hide-messages [data-fbfo-hidden],
+html.fbfo-hide-messages [role='complementary'] {
+  display: none !important;
+}
+
+html.fbfo-hide-left-nav [role='navigation']:not([role='banner'] *):not([role='banner']) {
+  display: none !important;
+}
