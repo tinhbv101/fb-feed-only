@@ -1,39 +1,42 @@
 (async function () {
   const rules = globalThis.FbFeedOnlyRules;
-  const keys = Object.keys(rules.DEFAULT_SETTINGS);
+  const storage = globalThis.FbFeedOnlyStorage;
+  const panel = globalThis.FbFeedOnlyPeoplePanel;
   const statusEl = document.getElementById('status');
+  const leftNavInput = document.getElementById('hideLeftNav');
+  const modeInputs = [...document.querySelectorAll('input[name="messageMode"]')];
 
-  function renderStatus(current) {
-    const active = Object.values(current).some(Boolean);
+  let settings = rules.DEFAULT_SETTINGS;
+
+  function render() {
+    const active = rules.isActive(settings);
     statusEl.textContent = active ? 'Đang bật' : 'Đang tắt';
     statusEl.classList.toggle('on', active);
+    modeInputs.forEach((input) => (input.checked = input.value === settings.messageMode));
+    leftNavInput.checked = settings.hideLeftNav;
+    panel.setMode(settings.messageMode);
   }
 
-  async function save(key, value) {
+  async function update(patch) {
+    settings = rules.mergeSettings({ ...settings, ...patch });
+    render();
     try {
-      await chrome.storage.sync.set({ [key]: value });
+      await storage.saveSettings(patch);
     } catch (error) {
       console.error('[FB Feed Only] Failed to save setting:', error);
     }
   }
 
-  let settings = rules.DEFAULT_SETTINGS;
   try {
-    settings = rules.mergeSettings(await chrome.storage.sync.get(rules.DEFAULT_SETTINGS));
+    settings = await storage.getSettings();
   } catch (error) {
     console.error('[FB Feed Only] Failed to load settings, using defaults:', error);
   }
 
   document.getElementById('version').textContent = `v${chrome.runtime.getManifest().version}`;
-  renderStatus(settings);
+  modeInputs.forEach((input) => input.addEventListener('change', () => update({ messageMode: input.value })));
+  leftNavInput.addEventListener('change', () => update({ hideLeftNav: leftNavInput.checked }));
 
-  keys.forEach((key) => {
-    const input = document.getElementById(key);
-    input.checked = settings[key];
-    input.addEventListener('change', () => {
-      settings = rules.mergeSettings({ ...settings, [key]: input.checked });
-      renderStatus(settings);
-      save(key, input.checked);
-    });
-  });
+  await panel.init();
+  render();
 })();

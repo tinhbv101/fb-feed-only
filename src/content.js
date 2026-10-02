@@ -1,73 +1,89 @@
 (function () {
   const rules = globalThis.FbFeedOnlyRules;
-  const HIDDEN_ATTR = 'data-fbfo-hidden';
+  const peopleRules = globalThis.FbFeedOnlyPeopleRules;
+  const storage = globalThis.FbFeedOnlyStorage;
+  const hideAll = globalThis.FbFeedOnlyHideAll;
+  const personFilter = globalThis.FbFeedOnlyPersonFilter;
   const FLUSH_DELAY_MS = 150;
+  const BOUNCE_KEY = 'fbfo-bounced-thread';
 
   let settings = rules.DEFAULT_SETTINGS;
+  let people = Object.freeze({});
+  let selectedIds = Object.freeze([]);
   // Redirects are irreversible, so wait for the real settings instead of acting on defaults.
-  let settingsLoaded = false;
+  let loaded = false;
+  let redirecting = false;
   let pendingRoots = [];
   let flushTimer = null;
 
   function applyClasses() {
     const { classList } = document.documentElement;
-    classList.toggle('fbfo-hide-messages', settings.hideMessages);
+    classList.toggle('fbfo-hide-messages', settings.messageMode === 'hideAll');
+    classList.toggle('fbfo-filter-people', rules.isPersonFilterMode(settings.messageMode));
     classList.toggle('fbfo-hide-left-nav', settings.hideLeftNav);
   }
 
-  function redirectAwayFromMessages() {
-    if (settingsLoaded && settings.hideMessages && rules.isMessagesPath(location.pathname)) {
-      location.replace('/');
+  function redirectTo(path) {
+    redirecting = true;
+    location.replace(path);
+  }
+
+  // /messages/ auto-opens the newest thread; if that one is hidden too, leave Messenger entirely.
+  function bounceFromThread(threadId) {
+    let alreadyBounced = false;
+    try {
+      alreadyBounced = sessionStorage.getItem(BOUNCE_KEY) === threadId;
+      sessionStorage.setItem(BOUNCE_KEY, threadId);
+    } catch {
+      alreadyBounced = true;
     }
+    redirectTo(alreadyBounced ? '/' : '/messages/');
   }
 
-  // Layout regions that are also position:fixed and must never be hidden as a "chat dock".
-  const PROTECTED_REGIONS = '[role="banner"], [role="navigation"], [role="main"], [role="feed"]';
-
-  // Chat windows live in a fixed-position dock; hiding the dock removes every chat at once.
-  function findChatDock(el) {
-    for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
-      if (node.matches(PROTECTED_REGIONS) || node.querySelector(PROTECTED_REGIONS)) return null;
-      if (getComputedStyle(node).position === 'fixed') return node;
+  function redirectIfNeeded() {
+    if (!loaded || redirecting) return;
+    const { messageMode } = settings;
+    if (messageMode === 'hideAll' && rules.isMessagesPath(location.pathname)) {
+      redirectTo('/');
+      return;
     }
-    return null;
+    if (!rules.isPersonFilterMode(messageMode)) return;
+    const threadId = peopleRules.parseThreadId(location.pathname);
+    if (threadId && peopleRules.shouldHideThread(messageMode, selectedIds, threadId)) bounceFromThread(threadId);
   }
 
-  // 'dock' = part of the chat popups, 'control' = a single button/link to Messenger.
-  function classify(el) {
-    const label = el.getAttribute('aria-label');
-    if (el.getAttribute('role') === 'textbox') return rules.isMessageInputLabel(label) ? 'dock' : null;
-    if (rules.isChatDockLabel(label)) return 'dock';
-    if (rules.isMessageButtonLabel(label)) return 'control';
-    if (el.matches('a[href]') && rules.isMessageHref(el.getAttribute('href'))) return 'control';
-    return null;
+  function filterState() {
+    return Object.freeze({
+      mode: settings.messageMode,
+      filtering: rules.isPersonFilterMode(settings.messageMode),
+      selectedIds,
+      knownNames: peopleRules.namesOf(people, Object.keys(people)),
+      selectedNames: peopleRules.namesOf(people, selectedIds),
+    });
   }
 
-  function hide(el, kind) {
-    const control = el.closest('[role="button"], a') ?? el;
-    const target = kind === 'dock' ? findChatDock(control) ?? control : control;
-    target.setAttribute(HIDDEN_ATTR, '');
-  }
-
-  function scan(root) {
-    const selector = '[aria-label], a[href]';
-    const candidates = root.matches?.(selector) ? [root] : [];
-    const descendants = root.querySelectorAll?.(selector) ?? [];
-    [...candidates, ...descendants]
-      .filter((el) => !el.closest(`[${HIDDEN_ATTR}]`))
-      .forEach((el) => {
-        const kind = classify(el);
-        if (kind) hide(el, kind);
-      });
+  async function remember(seen) {
+    if (!peopleRules.mergePeople(people, seen).changed) return;
+    try {
+      people = await storage.rememberPeople(seen);
+    } catch (error) {
+      console.error('[FB Feed Only] Failed to save seen conversations:', error);
+    }
   }
 
   function flush() {
+    clearTimeout(flushTimer);
     flushTimer = null;
-    const roots = pendingRoots;
+    const roots = [...new Set(pendingRoots)].filter((el) => el.isConnected);
     pendingRoots = [];
-    redirectAwayFromMessages();
-    if (!settings.hideMessages) return;
-    roots.filter((root) => root.isConnected).forEach(scan);
+    redirectIfNeeded();
+    if (!loaded || settings.messageMode === 'off') return;
+
+    if (settings.messageMode === 'hideAll') roots.forEach(hideAll.scan);
+    const state = filterState();
+    const seen = roots.flatMap((el) => personFilter.applyToRows(el, state));
+    personFilter.applyToWindows(state);
+    if (seen.length > 0) remember(seen);
   }
 
   function schedule(roots) {
@@ -76,35 +92,46 @@
   }
 
   function onMutations(mutations) {
-    const added = mutations.flatMap((m) => [...m.addedNodes]).filter((n) => n.nodeType === Node.ELEMENT_NODE);
+    // Facebook recycles list rows, so an href change can turn a row into a different conversation.
+    const roots = mutations.flatMap((m) => (m.type === 'attributes' ? [m.target] : [...m.addedNodes]));
     // SPA navigation can happen without adding nodes, so always schedule the path check.
-    schedule(added);
+    schedule(roots.filter((n) => n.nodeType === Node.ELEMENT_NODE));
   }
 
-  function updateSettings(stored) {
-    settings = rules.mergeSettings(stored);
-    settingsLoaded = true;
+  function refresh() {
     applyClasses();
-    schedule([document.documentElement]);
+    pendingRoots = [...pendingRoots, document.documentElement];
+    flush();
   }
 
-  async function loadSettings() {
+  async function load() {
     try {
-      updateSettings(await chrome.storage.sync.get(rules.DEFAULT_SETTINGS));
+      const [storedSettings, peopleState] = await Promise.all([storage.getSettings(), storage.getPeopleState()]);
+      settings = storedSettings;
+      people = peopleState.people;
+      selectedIds = peopleState.selectedIds;
     } catch (error) {
       console.error('[FB Feed Only] Failed to load settings, using defaults:', error);
-      updateSettings(rules.DEFAULT_SETTINGS);
     }
+    loaded = true;
+    refresh();
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync') return;
-    const changed = Object.fromEntries(Object.entries(changes).map(([key, { newValue }]) => [key, newValue]));
-    updateSettings({ ...settings, ...changed });
+    const newValues = Object.fromEntries(Object.entries(changes).map(([key, { newValue }]) => [key, newValue]));
+    if (area === 'sync') settings = rules.mergeSettings({ ...settings, ...newValues });
+    if (area === 'local' && 'people' in newValues) people = peopleRules.sanitizePeople(newValues.people);
+    if (area === 'local' && 'selectedIds' in newValues) selectedIds = peopleRules.sanitizeIds(newValues.selectedIds);
+    if (loaded) refresh();
   });
 
   // Apply defaults immediately to avoid a flash of Messenger UI before storage resolves.
   applyClasses();
-  new MutationObserver(onMutations).observe(document.documentElement, { childList: true, subtree: true });
-  loadSettings();
+  new MutationObserver(onMutations).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['href'],
+  });
+  load();
 })();

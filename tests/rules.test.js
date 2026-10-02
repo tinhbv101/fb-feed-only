@@ -38,10 +38,26 @@ test('label matching is exact, case-insensitive and bilingual', () => {
 
 test('mergeSettings falls back to defaults for missing or invalid values', () => {
   assert.deepEqual(rules.mergeSettings(undefined), rules.DEFAULT_SETTINGS);
-  assert.deepEqual(rules.mergeSettings({ hideMessages: 'yes', extra: 1 }), rules.DEFAULT_SETTINGS);
-  assert.deepEqual(rules.mergeSettings({ hideMessages: false, hideLeftNav: true }), {
-    hideMessages: false,
+  assert.deepEqual(rules.mergeSettings({ messageMode: 'nope', hideLeftNav: 'yes', extra: 1 }), rules.DEFAULT_SETTINGS);
+  assert.deepEqual(rules.mergeSettings({ messageMode: 'allow', hideLeftNav: true }), {
+    messageMode: 'allow',
     hideLeftNav: true,
   });
   assert.equal(Object.isFrozen(rules.mergeSettings({})), true);
+});
+
+test('mergeSettings migrates the pre-1.1 hideMessages boolean', () => {
+  assert.equal(rules.mergeSettings({ hideMessages: false }).messageMode, 'off');
+  assert.equal(rules.mergeSettings({ hideMessages: true }).messageMode, 'hideAll');
+  assert.equal(rules.mergeSettings({ hideMessages: false, messageMode: 'block' }).messageMode, 'block');
+});
+
+test('isActive and isPersonFilterMode reflect the mode explicitly', () => {
+  assert.equal(rules.isActive({ messageMode: 'off', hideLeftNav: false }), false);
+  assert.equal(rules.isActive({ messageMode: 'off', hideLeftNav: true }), true);
+  assert.equal(rules.isActive({ messageMode: 'block', hideLeftNav: false }), true);
+  assert.equal(rules.isPersonFilterMode('block'), true);
+  assert.equal(rules.isPersonFilterMode('allow'), true);
+  assert.equal(rules.isPersonFilterMode('hideAll'), false);
+  assert.equal(rules.isPersonFilterMode('off'), false);
 });

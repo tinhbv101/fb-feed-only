@@ -10,7 +10,12 @@
 
   const MESSAGE_INPUT_LABELS = Object.freeze(['message', 'tin nhắn', 'aa', 'viết tin nhắn']);
 
-  const DEFAULT_SETTINGS = Object.freeze({ hideMessages: true, hideLeftNav: false });
+  const MESSAGE_MODES = Object.freeze(['off', 'hideAll', 'block', 'allow']);
+
+  const DEFAULT_SETTINGS = Object.freeze({ messageMode: 'hideAll', hideLeftNav: false });
+
+  // 'hideMessages' is the pre-1.1 boolean, read only to migrate existing installs.
+  const SETTINGS_STORAGE_KEYS = Object.freeze([...Object.keys(DEFAULT_SETTINGS), 'hideMessages']);
 
   const normalize = (text) => String(text ?? '').trim().toLowerCase();
 
@@ -21,6 +26,8 @@
   const isChatDockLabel = (label) => CHAT_DOCK_LABELS.includes(normalize(label));
 
   const isMessageInputLabel = (label) => MESSAGE_INPUT_LABELS.includes(normalize(label));
+
+  const isPersonFilterMode = (mode) => mode === 'block' || mode === 'allow';
 
   function isMessageHref(href) {
     if (!href) return false;
@@ -33,27 +40,35 @@
     }
   }
 
+  function resolveMessageMode(source) {
+    if (MESSAGE_MODES.includes(source.messageMode)) return source.messageMode;
+    if (source.hideMessages === false) return 'off';
+    return DEFAULT_SETTINGS.messageMode;
+  }
+
   // Ignore unknown keys and wrong types so a corrupted storage entry can't break the page.
   function mergeSettings(stored) {
     const source = stored && typeof stored === 'object' ? stored : {};
-    return Object.freeze(
-      Object.fromEntries(
-        Object.entries(DEFAULT_SETTINGS).map(([key, fallback]) => [
-          key,
-          typeof source[key] === 'boolean' ? source[key] : fallback,
-        ])
-      )
-    );
+    return Object.freeze({
+      messageMode: resolveMessageMode(source),
+      hideLeftNav: typeof source.hideLeftNav === 'boolean' ? source.hideLeftNav : DEFAULT_SETTINGS.hideLeftNav,
+    });
   }
+
+  const isActive = (settings) => settings.messageMode !== 'off' || settings.hideLeftNav;
 
   const api = Object.freeze({
     DEFAULT_SETTINGS,
+    MESSAGE_MODES,
+    SETTINGS_STORAGE_KEYS,
     isMessagesPath,
     isMessageButtonLabel,
     isChatDockLabel,
     isMessageInputLabel,
     isMessageHref,
+    isPersonFilterMode,
     mergeSettings,
+    isActive,
   });
 
   if (typeof module === 'object' && module.exports) {

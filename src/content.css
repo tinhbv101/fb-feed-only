@@ -4,6 +4,10 @@ html.fbfo-hide-messages [role='complementary'] {
   display: none !important;
 }
 
+html.fbfo-filter-people [data-fbfo-person-hidden] {
+  display: none !important;
+}
+
 html.fbfo-hide-left-nav [role='navigation']:not([role='banner'] *):not([role='banner']) {
   display: none !important;
 }
